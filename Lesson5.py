@@ -19,6 +19,15 @@ def gini(labels):
     return impurity
 
 
+def entropy(labels):
+    classes = Counter(labels)
+    impurity = 1
+    for label in classes:
+        p = classes[label] / len(labels)
+        impurity -= p * np.log2(p) if p else 0
+    return impurity
+
+
 def accuracy(y, y_pred):
     return np.count_nonzero(np.equal(y, y_pred)) / y.shape[0]
 
@@ -75,7 +84,7 @@ class NodeClassificator:
         y = self.y[self.idxs]
         y_ = y[lhs]
         p = y[lhs].shape[0] / y.shape[0]
-        return gini(y) - p * gini(y[lhs]) - (1 - p) * gini(y[rhs])
+        return entropy(y) - p * entropy(y[lhs]) - (1 - p) * entropy(y[rhs])
 
     @property
     def split_col(self):
@@ -142,7 +151,7 @@ class RandomForestClassificator:
     def __get_oob(self, data, labels):
         y_pred = []
         y_i = []
-        for i, x in enumerate(train_data):
+        for i, x in enumerate(data):
             res_x = []
             for out_i in self.out_indexes:
                 if i in out_i:
@@ -151,7 +160,7 @@ class RandomForestClassificator:
             if res_x:
                 y_pred.append(Counter(res_x).most_common(1)[0][0])
                 y_i.append(i)
-        return accuracy(train_labels[y_i], y_pred)
+        return accuracy(labels[y_i], y_pred)
 
     def predict(self, data):
         predictions = []
