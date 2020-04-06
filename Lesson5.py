@@ -10,23 +10,6 @@ def get_dataset(n_samples=100, random_state=42):
                                         n_clusters_per_class=2, random_state=random_state)
 
 
-def get_bootstrap(data, labels, n_trees):
-    n_samples = data.shape[0]
-    bootstrap = []
-
-    for i in range(n_trees):
-        b_data = np.zeros(data.shape)
-        b_labels = np.zeros(labels.shape)
-
-        for j in range(n_samples):
-            sample_index = np.random.randint(0, n_samples - 1)
-            b_data[j] = data[sample_index]
-            b_labels[j] = labels[sample_index]
-        bootstrap.append((b_data, b_labels))
-
-    return bootstrap
-
-
 def gini(labels):
     classes = Counter(labels)
     impurity = 1
@@ -41,7 +24,6 @@ def accuracy(y, y_pred):
 
 
 class NodeClassificator:
-
     LEAFS: int = 0
     NODES = 0
 
@@ -57,7 +39,7 @@ class NodeClassificator:
         self.col_count = x.shape[1]
         self.score = 0
         self.val = Counter(y[idxs]).most_common(1)[0][0]
-        #if NodeClassificator.LEAFS < self.max_leaf and NodeClassificator.NODES < self.max_deep:
+        # if NodeClassificator.LEAFS < self.max_leaf and NodeClassificator.NODES < self.max_deep:
         self.find_varsplit()
 
     def find_varsplit(self):
@@ -93,7 +75,7 @@ class NodeClassificator:
         y = self.y[self.idxs]
         y_ = y[lhs]
         p = y[lhs].shape[0] / y.shape[0]
-        return gini(y) - p * gini(y[lhs]) - (1-p) * gini(y[rhs])
+        return gini(y) - p * gini(y[lhs]) - (1 - p) * gini(y[rhs])
 
     @property
     def split_col(self):
@@ -114,7 +96,6 @@ class NodeClassificator:
 
 
 class DecisionTreeClassificator:
-
     leafs = 0
     nodes = 0
 
@@ -128,12 +109,49 @@ class DecisionTreeClassificator:
 
 class RandomForestClassificator:
 
+    def get_bootstrap(self, data, labels, n_trees):
+        n_samples = data.shape[0]
+        bootstrap = []
+
+        data_set = set(range(data.shape[0]))
+        out_indexes = []
+
+        for i in range(n_trees):
+            b_data = np.zeros(data.shape)
+            b_labels = np.zeros(labels.shape)
+            b_data_set = set()
+            for j in range(n_samples):
+                sample_index = np.random.randint(0, n_samples - 1)
+                b_data_set.add(sample_index)
+                b_data[j] = data[sample_index]
+                b_labels[j] = labels[sample_index]
+            out_indexes.append(data_set.difference(b_data_set))
+            bootstrap.append((b_data, b_labels))
+        self.bootstrap = bootstrap
+        self.out_indexes = out_indexes
+
     def fit(self, data, labels, n_trees, min_leaf, max_leaf, max_deep):
-        bootstrap = get_bootstrap(data, labels, n_trees)
+        self.get_bootstrap(data, labels, n_trees)
         self.forest = []
-        for b_data, b_labels in bootstrap:
+        data_set = set()
+        for b_data, b_labels in self.bootstrap:
             self.forest.append(DecisionTreeClassificator().fit(b_data, b_labels, min_leaf, max_leaf, max_deep))
+        self.oob = self.__get_oob(data, labels)
         return self
+
+    def __get_oob(self, data, labels):
+        y_pred = []
+        y_i = []
+        for i, x in enumerate(train_data):
+            res_x = []
+            for out_i in self.out_indexes:
+                if i in out_i:
+                    label_pred = self.predict([x])[0]
+                    res_x.append(label_pred)
+            if res_x:
+                y_pred.append(Counter(res_x).most_common(1)[0][0])
+                y_i.append(i)
+        return accuracy(train_labels[y_i], y_pred)
 
     def predict(self, data):
         predictions = []
@@ -150,14 +168,14 @@ class RandomForestClassificator:
 
 
 if __name__ == '__main__':
-    data, labels = get_dataset()
+    train_data, train_labels = get_dataset()
 
-    train_data, test_data, train_labels, test_labels = model_selection.train_test_split(data, labels,
-                                                                                        test_size=0.3,
-                                                                                        random_state=1)
-    print('Классификация на 1 дереве')
-    classifier = RandomForestClassificator().fit(train_data, train_labels, n_trees=1,
-                                               min_leaf=5, max_leaf=100, max_deep=50)
+    classifier = RandomForestClassificator().fit(train_data, train_labels, n_trees=50,
+                                                 min_leaf=5, max_leaf=100, max_deep=50)
+
+    print(classifier.oob)
+'''
+    test_data, test_labels = train_data[classifier.out_indexes], train_labels[classifier.out_indexes]
     y_pred = classifier.predict(train_data)
     print(f'Accuracy for train data = {accuracy(train_labels, y_pred)}')
     y_pred = classifier.predict(test_data)
@@ -166,6 +184,7 @@ if __name__ == '__main__':
     print('Классификация на 3 деревьях')
     classifier = RandomForestClassificator().fit(train_data, train_labels, n_trees=3,
                                                  min_leaf=5, max_leaf=100, max_deep=50)
+    test_data, test_labels = train_data[classifier.out_indexes], train_labels[classifier.out_indexes]
     y_pred = classifier.predict(train_data)
     print(f'Accuracy for train data = {accuracy(train_labels, y_pred)}')
     y_pred = classifier.predict(test_data)
@@ -174,6 +193,7 @@ if __name__ == '__main__':
     print('Классификация на 10 деревьях')
     classifier = RandomForestClassificator().fit(train_data, train_labels, n_trees=10,
                                                  min_leaf=5, max_leaf=100, max_deep=50)
+    test_data, test_labels = train_data[classifier.out_indexes], train_labels[classifier.out_indexes]
     y_pred = classifier.predict(train_data)
     print(f'Accuracy for train data = {accuracy(train_labels, y_pred)}')
     y_pred = classifier.predict(test_data)
@@ -182,10 +202,9 @@ if __name__ == '__main__':
     print('Классификация на 50 деревьях')
     classifier = RandomForestClassificator().fit(train_data, train_labels, n_trees=50,
                                                min_leaf=5, max_leaf=100, max_deep=50)
+    test_data, test_labels = train_data[classifier.out_indexes], train_labels[classifier.out_indexes]
     y_pred = classifier.predict(train_data)
     print(f'Accuracy for train data = {accuracy(train_labels, y_pred)}')
     y_pred = classifier.predict(test_data)
     print(f'Accuracy for test data = {accuracy(test_labels, y_pred)}')
-
-
-
+'''
