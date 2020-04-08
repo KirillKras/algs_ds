@@ -85,7 +85,6 @@ class NodeClassificator:
     LEAFS: int = 0
     NODES = 0
 
-
     def __init__(self, x, y, idxs, min_leaf, max_leaf, max_deep):
         NodeClassificator.NODES += 1
         self.x = x
